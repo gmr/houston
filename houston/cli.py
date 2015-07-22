@@ -35,7 +35,8 @@ class CLI(object):
         obj = controller.Controller(args.config_dir, args.environment,
                                     args.service, args.version, args.globals,
                                     args.delay, args.max_tries, args.no_removal)
-        obj.run()
+        if not obj.run():
+            sys.exit(2)
 
     @staticmethod
     def _create_parser():
