@@ -4,6 +4,7 @@ Houston Command Line Interface
 """
 import argparse
 import logging.config
+import logging
 from os import path
 import sys
 
@@ -11,6 +12,8 @@ from houston import controller
 
 from houston import DEBUG_CONFIG
 from houston import LOG_CONFIG
+
+LOGGER = logging.getLogger(__name__)
 
 DESC = 'Easy docker stack deployment to CoreOS clusters using Fleet and Consul'
 
@@ -35,7 +38,10 @@ class CLI(object):
         obj = controller.Controller(args.config_dir, args.environment,
                                     args.service, args.version, args.globals,
                                     args.delay, args.max_tries, args.no_removal)
-        if not obj.run():
+        if obj.run():
+            LOGGER.info('Eagle, looking great. You\'re Go.')
+        else:
+            LOGGER.info('Deployment failed.')
             sys.exit(2)
 
     @staticmethod
