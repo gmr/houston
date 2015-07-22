@@ -3,6 +3,7 @@ Build a deployable unit file that writes files to the CoreOS filesystem
 
 """
 import base64
+import errno
 import logging
 import os
 from os import path
@@ -94,10 +95,7 @@ class FileDeployment(object):
     def _build_filesystem(self):
         for file in self._file_list:
             file_path = path.join(self._temp_dir, file['path'].lstrip('/'))
-            try:
-                os.makedirs(path.dirname(file_path))
-            except FileExistsError:
-                pass
+            self._mkdir(path.dirname(file_path))
             LOGGER.debug('Creating %s', file_path)
             with open(file_path, 'w') as handle:
                 handle.write(file['content'])
@@ -113,9 +111,20 @@ class FileDeployment(object):
         os.chdir(cwd)
 
         with open(archive_file, 'r') as handle:
-            archive = base64.b64encode(bytes(handle.read(), encoding='utf-8'))
+            file = handle.read()
+            if utils.PYTHON3:
+                file = bytes(file, encoding='utf-8')
+            archive = base64.b64encode(file)
         os.unlink(archive_file)
         return archive
+
+    def _mkdir(self, dir_path):
+        LOGGER.debug('Ensuring directory exists %s', dir_path)
+        try:
+            os.makedirs(dir_path)
+        except OSError as exception:
+            if exception.errno != errno.EEXIST:
+                raise
 
     def _remove_artifacts(self):
         shutil.rmtree(self._temp_dir)

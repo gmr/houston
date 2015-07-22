@@ -3,6 +3,9 @@ Common Utility Methods
 
 """
 import re
+import sys
+
+PYTHON3 = True if sys.version_info > (3, 0, 0) else False
 
 URI = re.compile(r'(?P<scheme>\w+)\://(?P<host>[\/\w\d\.]+)(\:(?P<port>\d+)|)')
 DEFAULT_PORTS = {'http': 80, 'https': 443}
