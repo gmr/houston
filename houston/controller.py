@@ -55,7 +55,10 @@ class Controller(object):
 
         unit_file = path.join(self._config_path, 'units', 'service',
                               '{0}.service'.format(self._service))
-        self._deploy_unit(self._service, unit_file, self._version)
+        if self._deploy_unit(self._service, unit_file, self._version):
+            pass
+            # @todo shutdown previous versions of services
+            # @todo remove previous consul kv values for file deploy
 
     def _apply_template_variables(self, value):
         value = value.replace('{service}', self._service)
