@@ -30,9 +30,9 @@ DEBUG_CONFIG = {
             'handlers': ['console'],
             'level': 'INFO',
         },
-        'fleet': {
+        'fleetpy': {
             'handlers': ['console'],
-            'level': 'INFO',
+            'level': 'DEBUG',
         },
         'houston': {
             'handlers': ['console'],
