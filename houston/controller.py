@@ -22,17 +22,16 @@ UNIT_PATTERN = re.compile(r'(?P<image>[\w\-]+):?(?P<version>[\w\-\.]+)?'
 
 class Controller(object):
 
-    CHECK_DELAY = 3
-    MAX_CHECKS_BEFORE_FAILURE = 15
-
     def __init__(self, config_path, environment, service, version,
-                 deploy_globals):
+                 deploy_globals, delay, max_tries):
         self._config_path = self._normalize_path(config_path)
         self._environment = environment
         self._service = service
         self._version = version
         self._deploy_globals = deploy_globals
         self._deployed_units = []
+        self._delay = delay
+        self._max_tries = max_tries
         self._config = self._load_config(CONFIG_FILE)
 
         if environment not in self._config.get('environments', {}):
@@ -73,6 +72,8 @@ class Controller(object):
             vsn_hash = self._file_manifest_hash()
             unit_name = '{0}-file-deploy@{1}.service'.format(self._service,
                                                              vsn_hash)
+
+            LOGGER.info('Deploying %s', unit_name)
             if self._unit_is_active(unit_name):
                 return True
 
@@ -114,10 +115,11 @@ class Controller(object):
         unit_name = '{0}@{1}.service'.format(name, version or 'latest')
         LOGGER.info('Deploying %s', unit_name)
         unit = self._fleet.unit(unit_name)
+
         with open(unit_file) as handle:
             unit_str = handle.read()
-
         unit.read_string(self._apply_template_variables(unit_str))
+
         if self._unit_is_active(unit_name):
             self._deployed_units.append(unit_name)
             LOGGER.debug('%s is already running, skipping to next',
@@ -201,7 +203,7 @@ class Controller(object):
         return state and all([s.state == 'active' for s in state])
 
     def _wait_for_unit_to_become_active(self, unit_name):
-        for attempt in range(0, self.MAX_CHECKS_BEFORE_FAILURE):
+        for attempt in range(0, self._max_tries):
             state = self._fleet.state(True, unit_name)
             if self._unit_is_active(unit_name, state):
                 LOGGER.debug('All %s units active', unit_name)
@@ -222,9 +224,9 @@ class Controller(object):
                              self._machine_label(s))
 
             LOGGER.debug('Sleeping %i seconds before checking again',
-                         self.CHECK_DELAY)
-            time.sleep(self.CHECK_DELAY)
+                         self._delay)
+            time.sleep(self._delay)
 
         LOGGER.warn('Failed to validate unit state after %i attempts',
-                    self.MAX_CHECKS_BEFORE_FAILURE)
+                    self._max_tries)
         return False

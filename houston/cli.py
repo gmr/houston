@@ -33,7 +33,8 @@ class CLI(object):
             sys.exit(1)
 
         obj = controller.Controller(args.config_dir, args.environment,
-                                    args.service, args.version, args.globals)
+                                    args.service, args.version, args.globals,
+                                    args.delay, args.max_tries)
         obj.run()
 
     @staticmethod
@@ -46,7 +47,15 @@ class CLI(object):
         parser.add_argument('-e', '--environment', required=True,
                             help='The environment name')
 
-        parser.add_argument('-d', '--dry', action='store_true')
+        parser.add_argument('-d', '--delay', action='store', type=int,
+                            help='How long to pause between service '
+                                 'activation checks', default=5)
+
+        parser.add_argument('-m', '--max-tries', action='store', type=int,
+                            help='How many times should Houston try and'
+                                 'validate that a service has started',
+                            default=15)
+
         parser.add_argument('-v', '--verbose', action='store_true')
 
         parser.add_argument('-g', '--globals', action='store_true',
