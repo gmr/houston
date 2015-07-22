@@ -1,0 +1,27 @@
+[Unit]
+Description=Datadog Agent
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=true
+ExecStartPre=-/usr/bin/docker kill datadog
+ExecStartPre=-/usr/bin/docker rm datadog
+ExecStartPre=/usr/bin/docker pull datadog/docker-dd-agent:%i
+ExecStart=|
+    /usr/bin/docker run -d \
+        --name=datadog \
+        -h %H \
+        -p 8125:8125/udp \
+        -v /etc/dd-agent/conf.d:/etc/dd-agent/conf.d \
+        -v /var/run/docker.sock:/var/run/docker.sock \
+        -v /proc/mounts:/host/proc/mounts:ro \
+        -v /sys/fs/cgroup/:/host/sys/fs/cgroup:ro \
+        datadog/docker-dd-agent:%i
+ExecStop=/usr/bin/docker stop datadog
+
+[X-Fleet]
+Global=true
+MachineMetadata=datadog=true
+MachineMetadata=service={service}

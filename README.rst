@@ -20,6 +20,8 @@ Documentation
 
 Documentation is available on `ReadTheDocs <https://rabbitpy.readthedocs.org>`_.
 
+There is also an `example configuration directory <example/>`_.
+
 Version History
 ---------------
 

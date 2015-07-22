@@ -1,0 +1,20 @@
+[Unit]
+Description=FluentD Log Forwarder
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=true
+EnvironmentFile=/etc/environment
+ExecStartPre=-/usr/bin/docker kill fluentd
+ExecStartPre=-/usr/bin/docker rm fluentd
+ExecStartPre=/usr/bin/docker pull fluent/fluentd:latest
+ExecStart=/usr/bin/docker run -d \
+    --name fluentd \
+    -v /var/lib/docker/containers:/var/lib/docker/containers \
+    fluent/fluentd:latest
+ExecStop=/usr/bin/docker stop fluentd
+
+[X-Fleet]
+Global=true

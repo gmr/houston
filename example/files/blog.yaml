@@ -1,0 +1,38 @@
+%YAML 1.2
+---
+- path: /etc/profile.d/memcached.env
+  permissions: 0644
+  owner: core
+  content: |
+    MEMCACHED_ARGS="-m 512"
+
+- path: /etc/profile.d/datadog.env
+  permissions: 0644
+  owner: core
+  content: |
+    DATADOG_ARGS="--link=memcached:memcached --link=nginx:nginx"
+
+- path: /etc/dd-agent/conf.d/mcache.yaml
+  permissions: 0755
+  owner: core
+  content: |
+    init_config:
+
+    instances:
+      - url: memcached
+        port: 11211
+        tags:
+          - service:{service}
+          - environment:{environment}
+
+- path: /etc/dd-agent/conf.d/nginx.yaml
+  permissions: 0755
+  owner: core
+  content: |
+    init_config:
+
+    instances:
+      - nginx_status_url: http://nginx/nginx_status/
+        tags:
+          - service:{service}
+          - environment:{environment}

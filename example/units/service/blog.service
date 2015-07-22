@@ -1,0 +1,21 @@
+[Unit]
+Description=Blog Service
+Requires=consul.service
+Requires=memcached.service
+Requires=mysql.service
+After=consul.service
+After=memcached.service
+After=mysql.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=true
+ExecStartPre=-/usr/bin/docker kill %p-%i
+ExecStartPre=-/usr/bin/docker rm %p-%i
+ExecStartPre=/usr/bin/docker pull wordpress:%i
+ExecStart=/usr/bin/docker run -d --name %p-%i -P --link=memcached:memcached --link=mysql:mysql wordpress:%i
+ExecStop=/usr/bin/docker stop %p-%i
+
+[X-Fleet]
+Global=true
+MachineMetadata=service=%p

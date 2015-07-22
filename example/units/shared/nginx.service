@@ -1,0 +1,19 @@
+[Unit]
+Description=Nginx
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=true
+EnvironmentFile=/etc/profile.d/aweber.env
+ExecStartPre=-/usr/bin/docker kill nginx
+ExecStartPre=-/usr/bin/docker rm nginx
+ExecStartPre=/usr/bin/docker pull ${DOCKER_SERVER}/aweber/nginx
+ExecStart=/usr/bin/docker run -d --name nginx -p 80:80 ${DOCKER_SERVER}/aweber/nginx
+ExecStop=/usr/bin/docker stop nginx
+
+[X-Fleet]
+Global=true
+MachineMetadata=nginx=true
+MachineMetadata=service={service}

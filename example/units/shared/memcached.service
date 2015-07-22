@@ -1,0 +1,19 @@
+[Unit]
+Description=Memcached
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=true
+EnvironmentFile=-/etc/profile.d/memcached.env
+ExecStartPre=-/usr/bin/docker kill memcached
+ExecStartPre=-/usr/bin/docker rm memcached
+ExecStartPre=/usr/bin/docker pull memcached:%i
+ExecStart=/bin/bash -c "/usr/bin/docker run -d --name memcached -p 11211:11211 memcached:%i memcached ${MEMCACHED_ARGS:--m 64}"
+ExecStop=/usr/bin/docker stop memcached
+
+[X-Fleet]
+Global=true
+MachineMetadata=memcached=true
+MachineMetadata=service={service}

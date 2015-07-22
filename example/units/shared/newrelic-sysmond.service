@@ -1,0 +1,29 @@
+[Unit]
+Description=New Relic System Monitor (nrsysmond)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=true
+ExecStartPre=-/usr/bin/docker kill nrsysmond
+ExecStartPre=-/usr/bin/docker rm nrsysmond
+ExecStartPre=/usr/bin/docker newrelic/nrsysmond:%i
+ExecStart=/usr/bin/docker run -d \
+  --privileged=true \
+  --name nrsysmond \
+  --pid=host \
+  --net=host \
+  -v /sys:/sys \
+  -v /dev:/dev \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v /var/log:/var/log:rw \
+  -e NRSYSMOND_license_key=<YOUR-LICENSE-KEY-HERE> \
+  -e NRSYSMOND_logfile=/var/log/nrsysmond.log \
+  ${DOCKER_SERVER}/newrelic/nrsysmond:%i
+ExecStop=/usr/bin/docker stop -t 30 nrsysmond
+
+[X-Fleet]
+Global=true
+MachineMetadata=environment=prod-us-east-1
+MachineMetadata=service={service}

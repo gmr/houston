@@ -1,0 +1,30 @@
+[Unit]
+Description=Consul Server
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=true
+EnvironmentFile=/etc/environment
+ExecStartPre=-/usr/bin/docker stop consul
+ExecStartPre=-/usr/bin/docker rm consul
+ExecStartPre=/usr/bin/docker pull progrium/consul:latest
+ExecStart=/usr/bin/docker run -d \
+    --name consul \
+    -v /var/lib/consul:/var/lib/consul \
+    -p 8300:8300 \
+    -p 8301:8301 \
+    -p 8301:8301/udp \
+    -p 8500:8500 \
+    -p 53:8600 \
+    -p 53:8600/udp \
+    progrium/consul:latest \
+    -advertise=${COREOS_PRIVATE_IPV4} \
+    -dc={environment} \
+    -recursor=${RESOLVER} \
+    -node=%H
+ExecStop=/usr/bin/docker stop consul
+
+[X-Fleet]
+Global=true
