@@ -101,7 +101,6 @@ class Controller(object):
                 self._deployed_units.append(unit_name)
                 return True
 
-            LOGGER.debug('Building archive file')
             if self._file_deployment.build_archive():
 
                 LOGGER.info('Uploading archive file to consul')
@@ -191,9 +190,7 @@ class Controller(object):
             unit_str = handle.read()
         unit.read_string(self._apply_template_variables(unit_str))
 
-        if last_unit:
-            unit.add_option('Unit', 'Requires', last_unit)
-            unit.add_option('Unit', 'After', last_unit)
+        self._maybe_add_last_unit(unit, last_unit)
 
         if self._unit_is_active(unit_name):
             self._deployed_units.append(unit_name)
@@ -245,6 +242,27 @@ class Controller(object):
     @staticmethod
     def _machine_label(ntuple):
         return '{0}.../{1}'.format(ntuple.id[0:7], ntuple.ipaddr)
+
+    @staticmethod
+    def _maybe_add_last_unit(unit, last_unit):
+        if not last_unit:
+            return
+
+        for option in unit.options():
+            if (option['section'] == 'Unit' and
+                option['name'] in ['After', 'Requires'] and
+                option['value'] == last_unit):
+                LOGGER.debug('Bypassing addition of last unit dependency')
+                return
+
+        options = unit._options
+        unit._options = []
+        for option in options:
+            unit.add_option(option.section, option.name, option.value)
+            if option.section == 'Unit' and option.name == 'Description':
+                LOGGER.debug('Adding dependency on %s', last_unit)
+                unit.add_option('Unit', 'Requires', last_unit)
+                unit.add_option('Unit', 'After', last_unit)
 
     @staticmethod
     def _normalize_path(value):  # pragma: no cover
