@@ -23,7 +23,7 @@ UNIT_PATTERN = re.compile(r'(?P<image>[\w\-]+):?(?P<version>[\w\-\.]+)?'
 class Controller(object):
 
     def __init__(self, config_path, environment, service, version,
-                 deploy_globals, delay, max_tries):
+                 deploy_globals, delay, max_tries, no_removal):
         self._config_path = self._normalize_path(config_path)
         self._environment = environment
         self._service = service
@@ -32,6 +32,7 @@ class Controller(object):
         self._deployed_units = []
         self._delay = delay
         self._max_tries = max_tries
+        self._no_removal = no_removal
         self._config = self._load_config(CONFIG_FILE)
 
         if environment not in self._config.get('environments', {}):
@@ -130,15 +131,18 @@ class Controller(object):
             if unit.start():
                 if not self._wait_for_unit_to_become_active(unit_name):
                     LOGGER.error('Failed to deploy %s', unit_name)
+                    if not self._no_removal:
+                        LOGGER.debug('Removing unit from fleet: %s', unit_name)
                     unit.destroy()
                     return False
             else:
                 LOGGER.error('Failed to start %s', unit_name)
-                unit.destroy()
+                if not self._no_removal:
+                    LOGGER.debug('Removing unit from fleet: %s', unit_name)
+                    unit.destroy()
                 return False
         else:
             LOGGER.error('Failed to submit %s', unit_name)
-            unit.destroy()
             return False
         LOGGER.info("%s has started", unit_name)
         self._deployed_units.append(unit_name)

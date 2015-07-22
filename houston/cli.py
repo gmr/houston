@@ -34,7 +34,7 @@ class CLI(object):
 
         obj = controller.Controller(args.config_dir, args.environment,
                                     args.service, args.version, args.globals,
-                                    args.delay, args.max_tries)
+                                    args.delay, args.max_tries, args.no_removal)
         obj.run()
 
     @staticmethod
@@ -55,6 +55,8 @@ class CLI(object):
                             help='How many times should Houston try and'
                                  'validate that a service has started',
                             default=15)
+        parser.add_argument('-n', '--no-removal', action='store_true',
+                            help='Do not remove units from fleet upon failure')
 
         parser.add_argument('-v', '--verbose', action='store_true')
 
