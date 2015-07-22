@@ -36,12 +36,12 @@ class Controller(object):
         self._max_tries = max_tries
         self._no_removal = no_removal
         self._config = self._load_config(CONFIG_FILE)
-
         if environment not in self._config.get('environments', {}):
             raise ValueError('environment not found')
 
         kwargs = utils.parse_endpoint(self.env_config['consul'])
         self._consul = consulate.Consul(**kwargs)
+        self._file_deployment = None
         self._fleet = fleetpy.Client(self.env_config.get('fleet'))
 
     @property
@@ -66,11 +66,11 @@ class Controller(object):
             LOGGER.info('Validated service is running with Consul')
 
             self._shutdown_other_versions()
+            self._file_deployment.remove_other_archive_versions()
 
-            # @todo remove previous consul kv values for file deploy
-
-        LOGGER.info('Deployment of %s %s and dependencies successful',
+        LOGGER.info('Deployment of %s %s and its dependencies successful.',
                     self._service, self._version)
+        LOGGER.info('Eagle, looking great. You\'re Go.')
         return True
 
     def _check_consul_for_service(self):
@@ -111,29 +111,32 @@ class Controller(object):
             vsn_hash = self._file_manifest_hash()
             unit_name = '{0}-file-deploy@{1}.service'.format(self._service,
                                                              vsn_hash)
-
+            self._file_deployment = files.FileDeployment(unit_name,
+                                                         self.env_config,
+                                                         self._config_path,
+                                                         self._service)
             LOGGER.info('Deploying %s', unit_name)
             if self._unit_is_active(unit_name):
+                self._deployed_units.append(unit_name)
                 return True
 
-            file_deployment = files.FileDeployment(unit_name,
-                                                   self.env_config,
-                                                   self._config_path,
-                                                   self._service)
+            LOGGER.debug('Building archive file')
+            if self._file_deployment.build_archive():
 
-            LOGGER.info('Uploading archive file to consul')
-            file_deployment.upload_archive()
+                LOGGER.info('Uploading archive file to consul')
+                self._file_deployment.upload_archive()
 
-            LOGGER.info('Deploying archive file as %s', unit_name)
-            unit = self._fleet.unit(unit_name)
-            unit.read_string(file_deployment.unit_file())
-            unit.submit()
-            unit.start()
+                LOGGER.info('Deploying archive file as %s', unit_name)
+                unit = self._fleet.unit(unit_name)
+                unit.read_string(self._file_deployment.unit_file())
+                unit.submit()
+                unit.start()
 
-            if not self._wait_for_unit_to_become_active(unit_name):
-                LOGGER.error('Failed to deploy files')
-                return False
+                if not self._wait_for_unit_to_become_active(unit_name):
+                    LOGGER.error('Failed to deploy files')
+                    return False
 
+                self._deployed_units.append(unit_name)
         return True
 
     def _deploy_shared_units(self):
@@ -241,13 +244,12 @@ class Controller(object):
         return units
 
     def _shutdown_other_versions(self):
-        LOGGER.debug('Shutting down previously running units')
+        LOGGER.debug('Shutting down running units for other image versions')
         units = [utils.parse_unit_name(u.name) for u in self._fleet.units()]
         destroy = set()
         for deployed_unit in self._deployed_units:
             (deployed_name,
              deployed_version) = utils.parse_unit_name(deployed_unit)
-
             for name, version in units:
                 if name == deployed_name and version != deployed_version:
                     destroy.add((name, version))
