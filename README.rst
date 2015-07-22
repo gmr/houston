@@ -26,7 +26,7 @@ with the tool of your choice:
 Documentation
 -------------
 
-Documentation is available on `ReadTheDocs <https://rabbitpy.readthedocs.org>`_.
+Documentation is available on `ReadTheDocs <https://houston.readthedocs.org/en/latest>`_.
 
 There is also an `example configuration directory <example/>`_.
 
