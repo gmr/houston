@@ -50,23 +50,27 @@ class Controller(object):
 
     def run(self):
         if not self._deploy_files():
-            LOGGER.debug('Aborting run due to file deployment error')
+            LOGGER.info('Aborting run due to file deployment error')
             return False
 
         if not self._deploy_shared_units():
-            LOGGER.debug('Aborting run due to shared unit deployment error')
+            LOGGER.info('Aborting run due to shared unit deployment error')
             return False
 
         unit_file = path.join(self._config_path, 'units', 'service',
                               '{0}.service'.format(self._service))
-        if self._deploy_unit(self._service, unit_file, self._version):
-            if not self._check_consul_for_service():
-                LOGGER.error('Service is not deployed to all expected nodes')
-                return False
-            LOGGER.info('Validated service is running with Consul')
+        if not self._deploy_unit(self._service, unit_file, self._version):
+            LOGGER.info('Aborting run due to service unit deployment error')
+            return False
 
-            self._shutdown_other_versions()
-            self._file_deployment.remove_other_archive_versions()
+        if not self._check_consul_for_service():
+            LOGGER.error('Aborted due to service missing on expected nodes')
+            return False
+
+        LOGGER.info('Validated service is running with Consul')
+
+        self._shutdown_other_versions()
+        self._file_deployment.remove_other_archive_versions()
 
         LOGGER.info('Deployment of %s %s and its dependencies successful.',
                     self._service, self._version)
