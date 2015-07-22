@@ -5,7 +5,7 @@ Houston
 Easy docker stack deployment to CoreOS clusters using Fleet and Consul
 
 """
-__version__ = '0.1.0'
+__version__ = '0.1.1'
 
 
 DEBUG_CONFIG = {
