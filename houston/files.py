@@ -39,11 +39,13 @@ MachineMetadata=service={service}
 class FileDeployment(object):
 
     CONFIG_PREFIX = 'files'
-    CONSUL_PREFIX = 'deployinator'
+    CONSUL_PREFIX = 'houston'
 
-    def __init__(self, name, config, config_path, service):
+    def __init__(self, name, config, config_path, service, prefix=None):
+        self._archive = None
         self._config = config
         self._config_path = config_path
+        self._consul_prefix = prefix or self.CONSUL_PREFIX
         self._service = service
         self._unit_name = name
 
@@ -57,28 +59,37 @@ class FileDeployment(object):
             LOGGER.info(error)
             self._file_list = []
 
-        if self._file_list:
-            self._build_filesystem()
-            self._archive = self._create_archive()
-            self._remove_artifacts()
-
-        self._archive_key = '{0}/{1}'.format(self.CONSUL_PREFIX, name)
+        self._archive_key = '{0}/{1}'.format(self._consul_prefix, name)
 
     @property
     def archive_key(self):
         return self._archive_key
 
-    @property
-    def has_files(self):
-        return bool(self._file_list)
-
-    def unit_file(self):
-        output = UNIT_TEMPLATE.replace('{archive_key}', self._archive_key)
-        return output.replace('{service}', self._service)
+    def build_archive(self):
+        if not self._file_list:
+            LOGGER.debug('No files to build archive for')
+            return False
+        LOGGER.debug('Building archive file')
+        self._build_filesystem()
+        self._archive = self._create_archive()
+        self._remove_artifacts()
+        return True
 
     def remove_archive(self):
         LOGGER.debug('Removing archive from Consul as %s', self._archive_key)
         return self._consul.kv.delete(self.archive_key)
+
+    def remove_other_archive_versions(self):
+        name, version = utils.parse_unit_name(self._unit_name)
+        keys = self._consul.kv.find('{0}/{1}@'.format(self._consul_prefix, name))
+        for key in keys:
+            if key != self._archive_key:
+                LOGGER.debug('Removing previous archive version: %s', key)
+                self._consul.kv.delete(key)
+
+    def unit_file(self):
+        output = UNIT_TEMPLATE.replace('{archive_key}', self._archive_key)
+        return output.replace('{service}', self._service)
 
     def upload_archive(self):
         LOGGER.debug('Uploading archive to Consul as %s', self._archive_key)
