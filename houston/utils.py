@@ -26,3 +26,17 @@ def parse_endpoint(endpoint):
     return {'scheme': match.group('scheme'),
             'host': match.group('host'),
             'port': port}
+
+
+def parse_unit_name(unit_name):
+    """Parse the given unit name returning a tuple of name, version.
+
+    :param str unit_name: The unit name to parse
+    :rtype: (str, str)
+
+    """
+    if '@' in unit_name:
+        name, suffix = unit_name.split('@')
+        version = suffix[:-8]
+        return name, version
+    return unit_name[:-8], None
