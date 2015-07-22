@@ -1,0 +1,5 @@
+Todo
+====
+- Restart a deployment stack in order when the file archive or a shared image changes
+- Write docs
+- Add meaningful test coverage

@@ -46,6 +46,10 @@ Example of deploying a full stack application:
    INFO     Deploying example-datadog@ff444e66.service
    INFO     Deploying example@7b7d061b.service
    INFO     example@7b7d061b.service has started
+   INFO     Validated service is running with Consul
+   INFO     Destroying example@b67b4317.service
+   INFO     Deployment of example 7b7d061b and its dependencies successful.
+   INFO     Eagle, looking great. You're Go.
 
 When executed, houston has created a tarball of files from the `service's file manifest <example/files/blog.yaml>`_
 and uploaded it to Consul's KV database. It then deployed a dynamically created systemd Unit to fleet,
