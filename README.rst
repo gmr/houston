@@ -69,7 +69,7 @@ Once a deployment has been confirmed, it looks at all units submitted to fleet,
 checking to see if there are other versions of containers running than what it deployed.
 If so, it will destroy those other containers with fleet.
 
-Finally it will check to see if any other file archive versions exist in Consu for the
+Finally it will check to see if any other file archive versions exist in Consul's for the
 service, removing them if so.
 
 One of the more interesting parts for managing stack deployment is the namespacing
