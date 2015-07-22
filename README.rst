@@ -51,22 +51,32 @@ Example of deploying a full stack application:
    INFO     Deployment of example 7b7d061b and its dependencies successful.
    INFO     Eagle, looking great. You're Go.
 
-When executed, houston has created a tarball of files from the `service's file manifest <example/files/blog.yaml>`_
-and uploaded it to Consul's KV database. It then deployed a dynamically created systemd Unit to fleet,
+When executed, houston creates a tarball of files from the `service's file manifest <example/files/blog.yaml>`_
+and uploads it to Consul's KV database. It then deploys a dynamically created systemd unit to fleet,
 which pulls the tarball from Consul and extracts the files to the CoreOS filesystem.
 
-Once it has verified that job has deployed, it then iterated through the dependent
-containers specified in the `manifest <examples/manifest.yaml>`_, submitting and
-starting each job, waiting until it is listed as ``active`` in systemd, and then
-moves on to the next. It then started the example service, waiting for systemd
-to report it as active. Once confirmed, it then stopped any versions of the example
-service that do not match the deployment.
+In thge next step, it iterates through the dependency containers specified in the
+`manifest <examples/manifest.yaml>`_, submitting and starting each unit, waiting
+until a unit is listed as ``active`` in systemd for all nodes, and then
+moves on to the next.
+
+One the dependency containers have started, it starts the example service,
+waiting for systemd to report it as active. It then queries Consul for the version
+of the service that has started, ensuring that it is running on all the expected
+nodes that fleet says it has deployed it to.
+
+Once a deployment has been confirmed, it looks at all units submitted to fleet,
+checking to see if there are other versions of containers running than what it deployed.
+If so, it will destroy those other containers with fleet.
+
+Finally it will check to see if any other file archive versions exist in Consu for the
+service, removing them if so.
 
 One of the more interesting parts for managing stack deployment is the namespacing
 of the shared stack elements in fleet, so that updating one stack does not impact
 another.  For example, in the configuration, a service may be referred to as only
 ``pgbouncer:f20fb494``, but when deployed it will be prefixed and versioned
-appropriately.
+appropriately as ``example-pgbouncer@f20fb494`` if the service name is ``example``.
 
 Version History
 ---------------
