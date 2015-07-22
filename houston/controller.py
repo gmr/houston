@@ -8,10 +8,12 @@ from os import path
 import re
 import time
 
+import consulate
 import fleetpy
 import yaml
 
 from houston import files
+from houston import utils
 
 LOGGER = logging.getLogger(__name__)
 
@@ -38,6 +40,8 @@ class Controller(object):
         if environment not in self._config.get('environments', {}):
             raise ValueError('environment not found')
 
+        kwargs = utils.parse_endpoint(self.env_config['consul'])
+        self._consul = consulate.Consul(**kwargs)
         self._fleet = fleetpy.Client(self.env_config.get('fleet'))
 
     @property
@@ -47,18 +51,49 @@ class Controller(object):
     def run(self):
         if not self._deploy_files():
             LOGGER.debug('Aborting run due to file deployment error')
-            return
+            return False
 
         if not self._deploy_shared_units():
             LOGGER.debug('Aborting run due to shared unit deployment error')
-            return
+            return False
 
         unit_file = path.join(self._config_path, 'units', 'service',
                               '{0}.service'.format(self._service))
         if self._deploy_unit(self._service, unit_file, self._version):
-            pass
-            # @todo shutdown previous versions of services
+            if not self._check_consul_for_service():
+                LOGGER.error('Service is not deployed to all expected nodes')
+                return False
+            LOGGER.info('Validated service is running with Consul')
+
+            self._shutdown_other_versions()
+
             # @todo remove previous consul kv values for file deploy
+
+        LOGGER.info('Deployment of %s %s and dependencies successful',
+                    self._service, self._version)
+        return True
+
+    def _check_consul_for_service(self):
+        """Return true if the service expected to be running, is reported up
+        in Consul by checking for all ip addresses to be present.
+
+        :rtype: bool
+
+        """
+        version = self._version or 'latest'
+        state = self._fleet.state(True,
+                                  '{0}@{1}.service'.format(self._service,
+                                                           version))
+        LOGGER.debug('Checking to ensure service is up in consul')
+        expected = set([s.ipaddr for s in state])
+        running = self._consul.catalog.service(self._service)
+        actual = set()
+        for node in running:
+            if version in node['ServiceTags']:
+                actual.add(node['ServiceAddress'])
+        LOGGER.debug('Found %i nodes running %s %s',
+                     len(actual), self._service, version)
+        return (expected & actual) == expected
 
     def _apply_template_variables(self, value):
         value = value.replace('{service}', self._service)
@@ -204,6 +239,24 @@ class Controller(object):
             else:
                 units.append(match.group('image'))
         return units
+
+    def _shutdown_other_versions(self):
+        LOGGER.debug('Shutting down previously running units')
+        units = [utils.parse_unit_name(u.name) for u in self._fleet.units()]
+        destroy = set()
+        for deployed_unit in self._deployed_units:
+            (deployed_name,
+             deployed_version) = utils.parse_unit_name(deployed_unit)
+
+            for name, version in units:
+                if name == deployed_name and version != deployed_version:
+                    destroy.add((name, version))
+
+        for name, version in destroy:
+            LOGGER.info('Destroying %s@%s.service', name, version)
+            unit = self._fleet.unit(name, version)
+            if not unit.destroy():
+                LOGGER.error('Error destroying %s@%s.service', name, version)
 
     def _unit_is_active(self, unit_name, state=None):
         state = self._fleet.state(True, unit_name) if state is None else state
