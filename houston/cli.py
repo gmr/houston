@@ -25,23 +25,27 @@ class CLI(object):
 
     def run(self):
         args = self._parser.parse_args()
+
         if args.verbose:
             logging.config.dictConfig(DEBUG_CONFIG)
         else:
             logging.config.dictConfig(LOG_CONFIG)
 
-        if args.stack and args.service is None:
-            sys.stderr.write('ERROR: You must specify a shared stack name\n')
+        if not args.command:
+            sys.stderr.write('ERROR: You must specify a command\n\n')
+            self._parser.print_help()
             sys.exit(1)
 
-        if args.globals is None and args.service is None:
-            sys.stderr.write('ERROR: You must specify either service or '
-                             'global deployment\n')
-            sys.exit(1)
+        args_dict = vars(args)
+        for key in ['name', 'version']:
+            if key in args_dict:
+                args_dict[key] = args_dict[key][0]
 
         obj = controller.Controller(args.config_dir, args.environment,
-                                    args.service, args.version, args.globals,
-                                    args.stack, args.delay, args.max_tries,
+                                    args.command,
+                                    args_dict.get('name'),
+                                    args_dict.get('version'),
+                                    args.delay, args.max_tries,
                                     args.no_removal)
         if obj.run():
             LOGGER.info('Eagle, looking great. You\'re Go.')
@@ -56,6 +60,7 @@ class CLI(object):
                             default=path.abspath('.'),
                             help='Specify the path to the configuration '
                                  'directory. Default: .')
+
         parser.add_argument('-e', '--environment', required=True,
                             help='The environment name')
 
@@ -71,18 +76,29 @@ class CLI(object):
         parser.add_argument('-n', '--no-removal', action='store_true',
                             help='Do not remove units from fleet upon failure')
 
-        parser.add_argument('-g', '--globals', action='store_true',
-                            help='Deploy global units')
-
-        parser.add_argument('-s', '--stack', action='store_true',
-                            help='Deploy a shared stack')
+        parser.add_argument('-s', '--standalone', action='store_true',
+                            help='Deploy a standalone stack')
 
         parser.add_argument('-v', '--verbose', action='store_true')
 
-        parser.add_argument('service', nargs='?',
-                            help='Deploy the specified service')
-        parser.add_argument('version', nargs='?',
-                            help='The version of the service to deploy')
+        sparser = parser.add_subparsers(title='Commands', dest='command')
+
+        sparser.add_parser('global', help='Deploy the global stack')
+
+        s_parser = sparser.add_parser('service',
+                                      help='Deploy a service stack')
+
+        s_parser.add_argument('name', nargs=1,
+                              help='Name of the service to deploy')
+        s_parser.add_argument('version', nargs=1,
+                              help='The version of the service to deploy')
+
+        sa_parser = sparser.add_parser('standalone',
+                                       help='Deploy a standalone stack')
+        sa_parser.add_argument('name', nargs=1,
+                               help='Name of the standalone stack to deploy')
+
+
 
         return parser
 
