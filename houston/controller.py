@@ -49,8 +49,9 @@ class Controller(object):
         return self._config.get('environments', {}).get(self._environment, {})
 
     def run(self):
-        if self._global and self._deploy_globals():
-            return self._deploy_files()
+        if self._global:
+            if self._deploy_globals():
+                return self._deploy_files()
 
         if not self._deploy_files():
             LOGGER.info('Aborting run due to file deployment error')
@@ -101,7 +102,7 @@ class Controller(object):
                 manifest_file = 'global.yaml'
                 service = 'global'
             else:
-                manifest_file = '{0}/{0}.yaml'.format(self._command, self._name)
+                manifest_file = '{0}/{1}.yaml'.format(self._command, self._name)
             unit_name = '{0}-file-deploy@{1}.service'.format(service, vsn_hash)
             self._file_deployment = files.FileDeployment(unit_name,
                                                          self.env_config,
