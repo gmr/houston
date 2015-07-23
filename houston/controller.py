@@ -184,7 +184,7 @@ class Controller(object):
             unit_file = path.join(shared_unit_prefix,
                                   '{0}.service'.format(name))
             unit_name = self._unit_name('{0}-{1}'.format(self._name, name),
-                                            version)
+                                        version)
             if name.startswith(self._name):
                 unit_name = self._unit_name(name, version)
             if not self._deploy_unit(unit_name, unit_file, last_unit):
