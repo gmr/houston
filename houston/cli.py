@@ -30,6 +30,10 @@ class CLI(object):
         else:
             logging.config.dictConfig(LOG_CONFIG)
 
+        if args.stack and args.service is None:
+            sys.stderr.write('ERROR: You must specify a shared stack name\n')
+            sys.exit(1)
+
         if args.globals is None and args.service is None:
             sys.stderr.write('ERROR: You must specify either service or '
                              'global deployment\n')
@@ -37,7 +41,8 @@ class CLI(object):
 
         obj = controller.Controller(args.config_dir, args.environment,
                                     args.service, args.version, args.globals,
-                                    args.delay, args.max_tries, args.no_removal)
+                                    args.stack, args.delay, args.max_tries,
+                                    args.no_removal)
         if obj.run():
             LOGGER.info('Eagle, looking great. You\'re Go.')
         else:
@@ -62,13 +67,18 @@ class CLI(object):
                             help='How many times should Houston try and'
                                  'validate that a service has started',
                             default=15)
+
         parser.add_argument('-n', '--no-removal', action='store_true',
                             help='Do not remove units from fleet upon failure')
 
-        parser.add_argument('-v', '--verbose', action='store_true')
-
         parser.add_argument('-g', '--globals', action='store_true',
                             help='Deploy global units')
+
+        parser.add_argument('-s', '--stack', action='store_true',
+                            help='Deploy a shared stack')
+
+        parser.add_argument('-v', '--verbose', action='store_true')
+
         parser.add_argument('service', nargs='?',
                             help='Deploy the specified service')
         parser.add_argument('version', nargs='?',

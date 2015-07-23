@@ -1,0 +1,24 @@
+%YAML 1.2
+---
+- path: /opt/bin/consul-register
+  permissions: 0755
+  owner: core
+  content: |
+    #!/usr/bin/bash
+    source /etc/environment
+    PORT=`docker inspect -f '{{range $p, $conf := .NetworkSettings.Ports}}{{ if eq $p "8000/tcp" }}{{(index $conf 0).HostPort}}{{end}}{{end}}' $1-$2`
+    cat << EOF > /tmp/body.json
+    {
+      "ID": "$1-$2",
+      "Name": "$1",
+      "Tags": ["http", "$2"],
+      "Address": "${COREOS_PRIVATE_IPV4}",
+      "Port": $PORT,
+      "Check": {
+        "HTTP": "http://${COREOS_PRIVATE_IPV4}:${PORT}/status",
+        "Interval": "10s"
+      }
+    }
+    EOF
+    /usr/bin/curl -s -H "Content-type: application/json" -X POST -d "@/tmp/body.json"  http://${COREOS_PRIVATE_IPV4}:8500/v1/agent/service/register
+    rm /tmp/body.json

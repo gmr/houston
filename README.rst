@@ -30,6 +30,19 @@ Documentation is available on `ReadTheDocs <https://houston.readthedocs.org/en/l
 
 There is also an `example configuration directory <example/>`_.
 
+Deployment Types
+----------------
+Houston has 3 deployment types: global, shared stacks, and services. All three types allow for
+file archive deployments[1]_ using a `cloud-init style <http://cloudinit.readthedocs.org/en/latest/topics/examples.html#writing-out-arbitrary-files>`_
+``write_files`` section.
+
+  - Global deployments place a single list of units intended to be shared across all or a majority of CoreOS
+instances.
+  - A shared stack deployment is like the a global deployment but it is more targeted
+  - Service deployments allow for the deployment of a single unit and the shared units that it is dependent upon
+
+.. [1] Global file deployments happen after the unit files are deployed so that Consul can be up and running prior to the placement of the global files.
+
 Usage Example
 -------------
 Example of deploying a full stack application:
@@ -55,7 +68,7 @@ When executed, houston creates a tarball of files from the `service's file manif
 and uploads it to Consul's KV database. It then deploys a dynamically created systemd unit to fleet,
 which pulls the tarball from Consul and extracts the files to the CoreOS filesystem.
 
-In thge next step, it iterates through the dependency containers specified in the
+In the next step, it iterates through the dependency containers specified in the
 `manifest <examples/manifest.yaml>`_, submitting and starting each unit, waiting
 until a unit is listed as ``active`` in systemd for all nodes, and then
 moves on to the next.

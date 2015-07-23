@@ -32,9 +32,9 @@ cd / && curl \\"http://localhost:8500/v1/kv/{archive_key}?raw\\" | base64 -d \
 
 [X-Fleet]
 Global=true
-MachineMetadata=service={service}
 """
 
+SERVICE_TEMPLATE = "MachineMetadata=service={service}"
 
 class FileDeployment(object):
 
@@ -88,7 +88,10 @@ class FileDeployment(object):
                 self._consul.kv.delete(key)
 
     def unit_file(self):
-        output = UNIT_TEMPLATE.replace('{archive_key}', self._archive_key)
+        output = UNIT_TEMPLATE
+        if self._service != 'global':
+            output += SERVICE_TEMPLATE
+        output = output.replace('{archive_key}', self._archive_key)
         return output.replace('{service}', self._service)
 
     def upload_archive(self):
