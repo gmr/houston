@@ -32,10 +32,10 @@ There is also an `example configuration directory <example/>`_.
 
 Deployment Types
 ----------------
-Houston has 3 deployment types: global, shared stacks, and services. All three types allow for file archive deployments [1]_ using a `cloud-init style <http://cloudinit.readthedocs.org/en/latest/topics/examples.html#writing-out-arbitrary-files>`_ ``write_files`` section.
+Houston has 3 deployment types: global, standalone stacks, and services. All three types allow for file archive deployments [1]_ using a `cloud-init style <http://cloudinit.readthedocs.org/en/latest/topics/examples.html#writing-out-arbitrary-files>`_ ``write_files`` section.
 
 - Global deployments place a single list of units intended to be shared across all or a majority of CoreOS instances.
-- A shared stack deployment is like the a global deployment but it is more targeted
+- Standalone deployments are like the global deployment but allows for more targeted deployments with file archives deployed first.
 - Service deployments allow for the deployment of a single unit and the shared units that it is dependent upon
 
 Usage Example
