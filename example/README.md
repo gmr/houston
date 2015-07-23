@@ -13,6 +13,5 @@ This is a contrived example and is not expected to work out of the box, but inst
 **Directories**
 
 - ``files``: Cloud-Init style file manifests for deploying of files as part of service deployment
-- ``units/global``: Units that are deployed to the whole environment
 - ``units/service``: Application/service units
-- ``units/shared``: Units that are shared across multiple services
+- ``units/shared``: Non-service units
