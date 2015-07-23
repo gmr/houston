@@ -42,9 +42,9 @@ Usage Example
 -------------
 Example of deploying a full stack application:
 
-.. code:: bash
+.. code::
 
-   houston -c config -e test-us-east-1 example 7b7d061b
+   $ houston -c config -e test-us-east-1 example 7b7d061b
    INFO     Deploying example-file-deploy@11bede3c.service
    INFO     Deploying example-memcached@1.4.24.service
    INFO     Deploying example-nginx@35f9e1f3.service
