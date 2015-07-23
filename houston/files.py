@@ -41,11 +41,12 @@ class FileDeployment(object):
     CONFIG_PREFIX = 'files'
     CONSUL_PREFIX = 'houston'
 
-    def __init__(self, name, config, config_path, service, prefix=None):
+    def __init__(self, name, config, config_path, manifest_file, service, prefix=None):
         self._archive = None
         self._config = config
         self._config_path = config_path
         self._consul_prefix = prefix or self.CONSUL_PREFIX
+        self._manifest_file = manifest_file
         self._service = service
         self._unit_name = name
 
@@ -100,7 +101,7 @@ class FileDeployment(object):
 
     def _get_file_list(self):
         file_path = path.join(self._config_path, self.CONFIG_PREFIX,
-                              '{0}.yaml'.format(self._service))
+                              self._manifest_file)
         if not path.exists(file_path):
             raise ValueError('File config not found for {0}'.format(file_path))
         with open(file_path) as handle:
