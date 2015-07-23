@@ -24,14 +24,13 @@ UNIT_PATTERN = re.compile(r'(?P<image>[\w\-]+):?(?P<version>[\w\-\.]+)?'
 
 class Controller(object):
 
-    def __init__(self, config_path, environment, service, version,
-                 deploy_globals, deploy_stack, delay, max_tries, no_removal):
+    def __init__(self, config_path, environment, command, name, version,
+                 delay, max_tries, no_removal):
         self._config_path = self._normalize_path(config_path)
         self._environment = environment
-        self._service = service or ''
+        self._command = command
+        self._name = name or ''
         self._version = version
-        self._globals = deploy_globals
-        self._stack = deploy_stack
         self._deployed_units = []
         self._delay = delay
         self._max_tries = max_tries
@@ -50,16 +49,15 @@ class Controller(object):
         return self._config.get('environments', {}).get(self._environment, {})
 
     def run(self):
-        if self._globals:
-            if self._deploy_globals():
-                return self._deploy_files()
+        if self._global and self._deploy_globals():
+            return self._deploy_files()
 
         if not self._deploy_files():
             LOGGER.info('Aborting run due to file deployment error')
             return False
 
-        if self._stack:
-            return self._deploy_shared_units('shared-stacks')
+        if self._standalone:
+            return self._deploy_shared_units()
         return self._deploy_service()
 
     def _check_consul_for_service(self):
@@ -71,26 +69,25 @@ class Controller(object):
         """
         version = self._version or 'latest'
         state = self._fleet.state(True,
-                                  '{0}@{1}.service'.format(self._service,
-                                                           version))
+                                  '{0}@{1}.service'.format(self._name, version))
         LOGGER.debug('Checking to ensure service is up in consul')
         expected = set([s.ipaddr for s in state])
-        running = self._consul.catalog.service(self._service)
+        running = self._consul.catalog.service(self._name)
         actual = set()
         for node in running:
             if version in node['ServiceTags']:
                 actual.add(node['ServiceAddress'])
         LOGGER.debug('Found %i nodes running %s %s',
-                     len(actual), self._service, version)
+                     len(actual), self._name, version)
         return (expected & actual) == expected
 
     def _apply_template_variables(self, value):
-        value = value.replace('{service}', self._service)
+        value = value.replace('{service}', self._name)
         for unit_name in self._deployed_units:
             name, version = utils.parse_unit_name(unit_name)
             check = '{0}.service'.format(name)
-            if self._service:
-                check = check[len(self._service) + 1:]
+            if self._name:
+                check = check[len(self._name) + 1:]
             if check in value:
                 LOGGER.debug('Replacing %s with %s in value', check, unit_name)
                 value = value.replace(check, unit_name)
@@ -98,12 +95,18 @@ class Controller(object):
 
     def _deploy_files(self):
         if self._file_manifest():
+            service = self._name
             vsn_hash = self._file_manifest_hash()
-            service = 'global' if self._globals else self._service
+            if self._global:
+                manifest_file = 'global.yaml'
+                service = 'global'
+            else:
+                manifest_file = '{0}/{0}.yaml'.format(self._command, self._name)
             unit_name = '{0}-file-deploy@{1}.service'.format(service, vsn_hash)
             self._file_deployment = files.FileDeployment(unit_name,
                                                          self.env_config,
                                                          self._config_path,
+                                                         manifest_file,
                                                          service)
             LOGGER.info('Deploying %s', unit_name)
             if self._unit_is_active(unit_name):
@@ -130,8 +133,8 @@ class Controller(object):
 
     def _deploy_globals(self):
         last_unit = None
-        global_unit_prefix = path.join(self._config_path, 'units', 'global')
-        for name in self._config['global-units']:
+        global_unit_prefix = path.join(self._config_path, 'units', 'shared')
+        for name in self._config.get('global', []):
             version = None
             if ':' in name:
                 name, version = name.split(':')
@@ -145,13 +148,13 @@ class Controller(object):
         return True
 
     def _deploy_service(self):
-        if not self._deploy_shared_units('shared-units'):
+        if not self._deploy_shared_units():
             LOGGER.info('Aborting run due to shared unit deployment error')
             return False
 
         unit_file = path.join(self._config_path, 'units', 'service',
-                              '{0}.service'.format(self._service))
-        unit_name = self._unit_name(self._service, self._version)
+                              '{0}.service'.format(self._name))
+        unit_name = self._unit_name(self._name, self._version)
         if not self._deploy_unit(unit_name, unit_file):
             LOGGER.info('Aborting run due to service unit deployment error')
             return False
@@ -166,20 +169,20 @@ class Controller(object):
         self._file_deployment.remove_other_archive_versions()
 
         LOGGER.info('Deployment of %s %s and its dependencies successful.',
-                    self._service, self._version)
+                    self._name, self._version)
         return True
 
-    def _deploy_shared_units(self, list_type):
+    def _deploy_shared_units(self):
         # This should only be set if there is a file archive
         last_unit = self._deployed_units[0] if self._deployed_units else None
         shared_unit_prefix = path.join(self._config_path, 'units', 'shared')
-        for name in self._get_units(list_type):
+        for name in self._get_units():
             version = None
             if ':' in name:
                 name, version = name.split(':')
             unit_file = path.join(shared_unit_prefix,
                                   '{0}.service'.format(name))
-            unit_name = self._unit_name('{0}-{1}'.format(self._service, name),
+            unit_name = self._unit_name('{0}-{1}'.format(self._name, name),
                                         version)
             if not self._deploy_unit(unit_name, unit_file, last_unit):
                 LOGGER.error('Aborting, failed to deploy %s', unit_name)
@@ -203,7 +206,9 @@ class Controller(object):
                          unit_name)
             return True
 
+        LOGGER.debug('Submitting %s', unit_name)
         if unit.submit():
+            LOGGER.debug('Starting %s', unit_name)
             if unit.start():
                 if not self._wait_for_unit_to_become_active(unit_name):
                     LOGGER.error('Failed to deploy %s', unit_name)
@@ -225,12 +230,11 @@ class Controller(object):
         return True
 
     def _file_manifest(self):
-        if self._globals:
+        if self._global:
             file_path = path.join(self._config_path, 'files', 'global.yaml')
         else:
-            subdir = 'stack' if self._stack else 'service'
-            file_path = path.join(self._config_path, 'files', subdir,
-                                  '{0}.yaml'.format(self._service))
+            file_path = path.join(self._config_path, 'files', self._command,
+                                  '{0}.yaml'.format(self._name))
         if not path.exists(file_path):
             return None
         with open(file_path) as handle:
@@ -241,9 +245,9 @@ class Controller(object):
         hash_value = hashlib.md5(value.encode('utf-8'))
         return hash_value.hexdigest()[:8]
 
-    def _get_units(self, list_type):
+    def _get_units(self):
         units = []
-        for unit in self._config.get(list_type).get(self._service, []):
+        for unit in self._config.get(self._command).get(self._name, []):
             match = UNIT_PATTERN.match(unit)
             if match.group('exp'):
                 key, value = match.group('exp').split(':')
@@ -258,6 +262,10 @@ class Controller(object):
             else:
                 units.append(match.group('image'))
         return units
+
+    @property
+    def _global(self):
+        return self._command == 'global'
 
     def _load_config(self, filename):
         file = path.join(self._config_path, filename)
@@ -302,6 +310,10 @@ class Controller(object):
         """
         return path.abspath(path.normpath(value))
 
+    @property
+    def _service(self):
+        return self._command == 'service'
+
     def _shutdown_other_versions(self):
         LOGGER.debug('Shutting down running units for other image versions')
         units = [utils.parse_unit_name(u.name) for u in self._fleet.units()]
@@ -318,6 +330,10 @@ class Controller(object):
             unit = self._fleet.unit(name, version)
             if not unit.destroy():
                 LOGGER.error('Error destroying %s@%s.service', name, version)
+
+    @property
+    def _standalone(self):
+        return self._command == 'standalone'
 
     def _unit_is_active(self, unit_name, state=None):
         state = self._fleet.state(True, unit_name) if state is None else state
