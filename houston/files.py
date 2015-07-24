@@ -19,7 +19,7 @@ from houston import utils
 
 LOGGER = logging.getLogger(__name__)
 
-UNIT_TEMPLATE = """\
+DEFAULT_UNIT_TEMPLATE = """\
 [Unit]
 Description=Houston File Archive Deployment
 
@@ -27,8 +27,9 @@ Description=Houston File Archive Deployment
 Type=oneshot
 RemainAfterExit=true
 ExecStart=/usr/bin/bash -c "\
-cd / && curl \\"http://localhost:8500/v1/kv/{archive_key}?raw\\" | base64 -d \
+sleep 5 & cd / && curl \\"http://localhost:8500/v1/kv/{archive_key}?raw\\" | base64 -d \
 | tar -xv"
+ExecStop=/usr/bin/true
 
 [X-Fleet]
 Global=true
@@ -36,12 +37,14 @@ Global=true
 
 SERVICE_TEMPLATE = "MachineMetadata=service={service}"
 
+
 class FileDeployment(object):
 
     CONFIG_PREFIX = 'files'
     CONSUL_PREFIX = 'houston'
 
-    def __init__(self, name, config, config_path, manifest_file, service, prefix=None):
+    def __init__(self, name, config, config_path, manifest_file, service,
+                 prefix=None):
         self._archive = None
         self._config = config
         self._config_path = config_path
@@ -49,6 +52,12 @@ class FileDeployment(object):
         self._manifest_file = manifest_file
         self._service = service
         self._unit_name = name
+
+        self._unit_template = DEFAULT_UNIT_TEMPLATE
+        unit_template_file = path.join(config_path, 'file-unit.template')
+        if path.exists(unit_template_file):
+            with open(unit_template_file, 'r') as handle:
+                self._unit_template = handle.read()
 
         kwargs = utils.parse_endpoint(self._config['consul'])
         self._consul = consulate.Consul(**kwargs)
@@ -71,7 +80,6 @@ class FileDeployment(object):
             LOGGER.debug('No files to build archive for')
             return False
         LOGGER.debug('Building archive file')
-        self._build_filesystem()
         self._archive = self._create_archive()
         self._remove_artifacts()
         return True
@@ -89,7 +97,7 @@ class FileDeployment(object):
                 self._consul.kv.delete(key)
 
     def unit_file(self):
-        output = UNIT_TEMPLATE
+        output = self._unit_template
         if self._service != 'global':
             output += SERVICE_TEMPLATE
         output = output.replace('{archive_key}', self._archive_key)
@@ -107,21 +115,27 @@ class FileDeployment(object):
         with open(file_path) as handle:
             return yaml.load(handle)
 
-    def _build_filesystem(self):
-        for file in self._file_list:
-            file_path = path.join(self._temp_dir, file['path'].lstrip('/'))
-            self._mkdir(path.dirname(file_path))
-            LOGGER.debug('Creating %s', file_path)
-            with open(file_path, 'w') as handle:
-                handle.write(file['content'])
-
     def _create_archive(self):
         cwd = os.getcwd()
         os.chdir(self._temp_dir)
         archive_file = path.join(tempfile.gettempdir(), str(uuid.uuid4()))
         tar = tarfile.open(archive_file, 'w')
         for file in self._file_list:
-            tar.add(file['path'].lstrip('/'))
+            with tempfile.TemporaryFile() as handle:
+                handle.write(self._maybe_encode(file.get('content', '')))
+                handle.seek(0)
+
+                info = tar.gettarinfo(arcname=file['path'], fileobj=handle)
+                if 'owner' in file:
+                    info.uname = file['owner']
+                if 'group' in file:
+                    info.gname = file['group']
+                if 'permissions' in file:
+                    info.mode = file['permissions']
+
+                handle.seek(0)
+                tar.addfile(info, handle)
+
         tar.close()
         os.chdir(cwd)
 
@@ -133,13 +147,18 @@ class FileDeployment(object):
         os.unlink(archive_file)
         return archive
 
-    def _mkdir(self, dir_path):
-        LOGGER.debug('Ensuring directory exists %s', dir_path)
+    @staticmethod
+    def _maybe_encode(value):
+        """If the value passed in is a str, encode it as UTF-8 bytes for Python 3
+
+        :param str|bytes value: The value to maybe encode
+        :rtype: bytes
+
+        """
         try:
-            os.makedirs(dir_path)
-        except OSError as exception:
-            if exception.errno != errno.EEXIST:
-                raise
+            return value.encode('utf-8')
+        except AttributeError:
+            return value
 
     def _remove_artifacts(self):
         shutil.rmtree(self._temp_dir)
