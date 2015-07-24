@@ -51,8 +51,9 @@ class Controller(object):
 
     def run(self):
         if self._global:
-            if self._deploy_globals():
-                return self._deploy_files()
+            if not self._deploy_globals():
+                return False
+            return self._deploy_files()
 
         if not self._deploy_files():
             LOGGER.info('Aborting run due to file deployment error')
