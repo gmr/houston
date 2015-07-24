@@ -26,10 +26,8 @@ Description=Houston File Archive Deployment
 [Service]
 Type=oneshot
 RemainAfterExit=true
-ExecStart=/usr/bin/bash -c "\
-sleep 5 & cd / && curl \\"http://localhost:8500/v1/kv/{archive_key}?raw\\" | base64 -d \
-| tar -xv"
-ExecStop=/usr/bin/true
+ExecStartPre=/usr/bin/sleep 30
+ExecStart=/usr/bin/bash -c 'curl -s "http://localhost:8500/v1/kv/{archive_key}?raw" | base64 -d | tar -C / -xvf -'
 
 [X-Fleet]
 Global=true
