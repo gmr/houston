@@ -13,6 +13,16 @@ environments:
     consul: https://consul.prod-us-east-1.com
     fleet: https://fleet.prod-us-east-1.com
 
+variables:
+  test-us-east-1:
+    domain: test-us-east-1.com
+
+  stage-us-east-1:
+    domain: stage-us-east-1.com
+
+  prod-us-east-1:
+    domain: prod-us-east-1.com
+
 global-units:
   - fluentd:707464a0
   - consul:35e75d05

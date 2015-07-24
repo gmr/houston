@@ -46,7 +46,7 @@ class CLI(object):
                                     args_dict.get('name'),
                                     args_dict.get('version'),
                                     args.delay, args.max_tries,
-                                    args.no_removal)
+                                    args.no_removal, args.skip_consul)
         if obj.run():
             LOGGER.info('Eagle, looking great. You\'re Go.')
         else:
@@ -76,8 +76,8 @@ class CLI(object):
         parser.add_argument('-n', '--no-removal', action='store_true',
                             help='Do not remove units from fleet upon failure')
 
-        parser.add_argument('-s', '--standalone', action='store_true',
-                            help='Deploy a standalone stack')
+        parser.add_argument('-s', '--skip-consul', action='store_true',
+                            help='Skip consul check on stack deployment')
 
         parser.add_argument('-v', '--verbose', action='store_true')
 
