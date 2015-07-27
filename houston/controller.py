@@ -53,14 +53,25 @@ class Controller(object):
         if self._global:
             if not self._deploy_globals():
                 return False
-            return self._deploy_files()
+            if not self._deploy_files():
+                return False
+            self._shutdown_other_versions()
+            if self._file_deployment:
+                self._file_deployment.remove_other_archive_versions()
+            return True
 
         if not self._deploy_files():
             LOGGER.info('Aborting run due to file deployment error')
             return False
 
         if self._standalone:
-            return self._deploy_shared_units()
+            if not self._deploy_shared_units():
+                return False
+            self._shutdown_other_versions()
+            if self._file_deployment:
+                self._file_deployment.remove_other_archive_versions()
+            return True
+
         return self._deploy_service()
 
     def _check_consul_for_service(self):
@@ -162,6 +173,11 @@ class Controller(object):
                 LOGGER.error('Aborting, failed to deploy %s', name)
                 return False
             last_unit = unit_name
+
+        self._shutdown_other_versions()
+        if self._file_deployment:
+            self._file_deployment.remove_other_archive_versions()
+
         return True
 
     def _deploy_service(self):
