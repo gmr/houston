@@ -25,7 +25,7 @@ UNIT_PATTERN = re.compile(r'(?P<image>[\w\-]+):?(?P<version>[\w\-\.]+)?'
 class Controller(object):
 
     def __init__(self, config_path, environment, command, name, version,
-                 delay, max_tries, no_removal, skip_consul):
+                 delay, max_tries, no_dependencies, no_removal, skip_consul):
         self._config_path = self._normalize_path(config_path)
         self._environment = environment
         self._command = command
@@ -34,6 +34,7 @@ class Controller(object):
         self._deployed_units = []
         self._delay = delay
         self._max_tries = max_tries
+        self._no_dependencies = no_dependencies
         self._no_removal = no_removal
         self._skip_consul = skip_consul
         self._config = self._load_config(CONFIG_FILE)
@@ -109,7 +110,7 @@ class Controller(object):
             name, version = utils.parse_unit_name(unit_name)
             check = '{0}.service'.format(name)
             checks = [check]
-            if self._name:
+            if self._name and check[len(self._name) + 1:] != 'service':
                 checks.append(check[len(self._name) + 1:])
             for check in checks:
                 if check in value:
@@ -132,7 +133,8 @@ class Controller(object):
                                                          self.env_config,
                                                          self._config_path,
                                                          manifest_file,
-                                                         service)
+                                                         service,
+                                                         self._environment)
             LOGGER.info('Deploying %s', unit_name)
             if self._unit_is_active(unit_name):
                 self._deployed_units.append(unit_name)
@@ -309,9 +311,8 @@ class Controller(object):
     def _machine_label(ntuple):
         return '{0}.../{1}'.format(ntuple.id[0:7], ntuple.ipaddr)
 
-    @staticmethod
-    def _maybe_add_last_unit(unit, last_unit):
-        if not last_unit:
+    def _maybe_add_last_unit(self, unit, last_unit):
+        if not last_unit or self._no_dependencies:
             return
 
         for option in unit.options():

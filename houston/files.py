@@ -42,11 +42,12 @@ class FileDeployment(object):
     CONSUL_PREFIX = 'houston'
 
     def __init__(self, name, config, config_path, manifest_file, service,
-                 prefix=None):
+                 environment=None, prefix=None):
         self._archive = None
         self._config = config
         self._config_path = config_path
         self._consul_prefix = prefix or self.CONSUL_PREFIX
+        self._environment = environment
         self._manifest_file = manifest_file
         self._service = service
         self._unit_name = name
@@ -88,7 +89,8 @@ class FileDeployment(object):
 
     def remove_other_archive_versions(self):
         name, version = utils.parse_unit_name(self._unit_name)
-        keys = self._consul.kv.find('{0}/{1}@'.format(self._consul_prefix, name))
+        keys = self._consul.kv.find('{0}/{1}@'.format(self._consul_prefix,
+                                                      name))
         for key in keys:
             if key != self._archive_key:
                 LOGGER.debug('Removing previous archive version: %s', key)
@@ -119,6 +121,11 @@ class FileDeployment(object):
         archive_file = path.join(tempfile.gettempdir(), str(uuid.uuid4()))
         tar = tarfile.open(archive_file, 'w')
         for file in self._file_list:
+            if file.get('environment'):
+                if file['environment'] != self._environment:
+                    LOGGER.debug('Bypassing file for %s [%s]',
+                                 file['environment'], self._environment)
+                    continue
             with tempfile.TemporaryFile() as handle:
                 handle.write(self._maybe_encode(file.get('content', '')))
                 handle.seek(0)
@@ -147,7 +154,8 @@ class FileDeployment(object):
 
     @staticmethod
     def _maybe_encode(value):
-        """If the value passed in is a str, encode it as UTF-8 bytes for Python 3
+        """If the value passed in is a str, encode it as UTF-8 bytes for
+        Python 3
 
         :param str|bytes value: The value to maybe encode
         :rtype: bytes

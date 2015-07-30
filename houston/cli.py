@@ -46,7 +46,9 @@ class CLI(object):
                                     args_dict.get('name'),
                                     args_dict.get('version'),
                                     args.delay, args.max_tries,
-                                    args.no_removal, args.skip_consul)
+                                    args.no_dependencies,
+                                    args.no_removal,
+                                    args.skip_consul)
         if obj.run():
             LOGGER.info('Eagle, looking great. You\'re Go.')
         else:
@@ -72,6 +74,9 @@ class CLI(object):
                             help='How many times should Houston try and'
                                  'validate that a service has started',
                             default=15)
+
+        parser.add_argument('--no-dependencies', action='store_true',
+                            help='Do not perform dependency injection in units')
 
         parser.add_argument('-n', '--no-removal', action='store_true',
                             help='Do not remove units from fleet upon failure')
