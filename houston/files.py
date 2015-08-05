@@ -80,7 +80,6 @@ class FileDeployment(object):
             return False
         LOGGER.debug('Building archive file')
         self._archive = self._create_archive()
-        self._remove_artifacts()
         return True
 
     def remove_archive(self):
@@ -120,23 +119,24 @@ class FileDeployment(object):
         os.chdir(self._temp_dir)
         archive_file = path.join(tempfile.gettempdir(), str(uuid.uuid4()))
         tar = tarfile.open(archive_file, 'w')
-        for file in self._file_list:
-            if file.get('environment'):
-                if file['environment'] != self._environment:
+        for entry in self._file_list:
+            if entry.get('environment'):
+                if entry['environment'] != self._environment:
                     LOGGER.debug('Bypassing file for %s [%s]',
-                                 file['environment'], self._environment)
+                                 entry['environment'], self._environment)
                     continue
             with tempfile.TemporaryFile() as handle:
-                handle.write(self._maybe_encode(file.get('content', '')))
+                content = self._replace_variables(entry.get('content', ''))
+                handle.write(self._maybe_encode(content))
                 handle.seek(0)
 
-                info = tar.gettarinfo(arcname=file['path'], fileobj=handle)
-                if 'owner' in file:
-                    info.uname = file['owner']
-                if 'group' in file:
-                    info.gname = file['group']
-                if 'permissions' in file:
-                    info.mode = file['permissions']
+                info = tar.gettarinfo(arcname=entry['path'], fileobj=handle)
+                if 'owner' in entry:
+                    info.uname = entry['owner']
+                if 'group' in entry:
+                    info.gname = entry['group']
+                if 'permissions' in entry:
+                    info.mode = entry['permissions']
 
                 handle.seek(0)
                 tar.addfile(info, handle)
@@ -145,10 +145,10 @@ class FileDeployment(object):
         os.chdir(cwd)
 
         with open(archive_file, 'r') as handle:
-            file = handle.read()
+            tarball = handle.read()
             if utils.PYTHON3:
-                file = bytes(file, encoding='utf-8')
-            archive = base64.b64encode(file)
+                tarball = bytes(tarball, encoding='utf-8')
+            archive = base64.b64encode(tarball)
         os.unlink(archive_file)
         return archive
 
@@ -166,5 +166,9 @@ class FileDeployment(object):
         except AttributeError:
             return value
 
-    def _remove_artifacts(self):
-        shutil.rmtree(self._temp_dir)
+    def _replace_variables(self, content):
+        if '{service}' in content:
+            content = content.replace('{service}', self._service)
+        if '{environment}' in content:
+            content = content.replace('{environment}', self._environment)
+        return content
