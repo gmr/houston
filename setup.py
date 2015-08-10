@@ -29,7 +29,7 @@ classifiers = ['Development Status :: 3 - Alpha',
                'Topic :: System :: Software Distribution']
 
 setuptools.setup(name='houston',
-                 version='0.2.3',
+                 version='0.3.0',
                  description=desc,
                  long_description=open('README.rst').read(),
                  author='Gavin M. Roy',

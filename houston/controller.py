@@ -25,7 +25,8 @@ UNIT_PATTERN = re.compile(r'(?P<image>[\w\-]+):?(?P<version>[\w\-\.]+)?'
 class Controller(object):
 
     def __init__(self, config_path, environment, command, name, version,
-                 delay, max_tries, no_dependencies, no_removal, skip_consul):
+                 delay, max_tries, no_dependencies, no_removal, skip_consul,
+                 remove_units):
         self._config_path = self._normalize_path(config_path)
         self._environment = environment
         self._command = command
@@ -37,6 +38,7 @@ class Controller(object):
         self._no_dependencies = no_dependencies
         self._no_removal = no_removal
         self._skip_consul = skip_consul
+        self._remove_unit_files = remove_units
         self._config = self._load_config(CONFIG_FILE)
         if environment not in self._config.get('environments', {}):
             raise ValueError('environment not found')
@@ -51,7 +53,10 @@ class Controller(object):
         return self._config.get('environments', {}).get(self._environment, {})
 
     def run(self):
-        if self._global:
+        if self._remove_unit_files:
+            return self._remove_units()
+
+        elif self._global:
             if not self._deploy_globals():
                 return False
             if not self._deploy_files():
@@ -60,6 +65,8 @@ class Controller(object):
             if self._file_deployment:
                 self._file_deployment.remove_other_archive_versions()
             return True
+
+        self._add_last_deployed_global()
 
         if not self._deploy_files():
             LOGGER.info('Aborting run due to file deployment error')
@@ -74,6 +81,40 @@ class Controller(object):
             return True
 
         return self._deploy_service()
+
+    def _add_last_deployed_global(self):
+        """Add the last global unit as a deployed unit for dependency injection
+        in the first standalone or service unit.
+
+        """
+        name = self._config.get('global', [])[-1]
+        version = None
+        if ':' in name:
+            name, version = name.split(':')
+        self._deployed_units.append(self._unit_name(name, version))
+
+    def _apply_variables(self, value):
+        value = value.replace('{service}', self._name)
+        variables = self._config.get('variables', {})
+        if self._environment in variables:
+            variables = variables[self._environment]
+        for name in variables:
+            key = '{{{0}}}'.format(name)
+            if key in value:
+                value = value.replace(key, variables[name])
+
+        prefix = self._name + '-'
+        for unit_name in self._deployed_units:
+            name, version = utils.parse_unit_name(unit_name)
+            checks = ['{0}.service'.format(name)]
+            if name.startswith(prefix):
+                checks.append('{}.service'.format(name[len(prefix):]))
+            for check in checks:
+                if check in value:
+                    LOGGER.debug('Replacing %s with %s in value',
+                                 check, unit_name)
+                    value = value.replace(check, unit_name)
+        return value
 
     def _check_consul_for_service(self):
         """Return true if the service expected to be running, is reported up
@@ -95,29 +136,6 @@ class Controller(object):
         LOGGER.debug('Found %i nodes running %s %s',
                      len(actual), self._name, version)
         return (expected & actual) == expected
-
-    def _apply_variables(self, value):
-        value = value.replace('{service}', self._name)
-        variables = self._config.get('variables', {})
-        if self._environment in variables:
-            variables = variables[self._environment]
-        for name in variables:
-            key = '{{{0}}}'.format(name)
-            if key in value:
-                value = value.replace(key, variables[name])
-
-        for unit_name in self._deployed_units:
-            name, version = utils.parse_unit_name(unit_name)
-            check = '{0}.service'.format(name)
-            checks = [check]
-            if self._name and check[len(self._name) + 1:] != 'service':
-                checks.append(check[len(self._name) + 1:])
-            for check in checks:
-                if check in value:
-                    LOGGER.debug('Replacing %s with %s in value',
-                                 check, unit_name)
-                    value = value.replace(check, unit_name)
-        return value
 
     def _deploy_files(self):
         if self._file_manifest():
@@ -208,8 +226,8 @@ class Controller(object):
         return True
 
     def _deploy_shared_units(self):
-        # This should only be set if there is a file archive
-        last_unit = self._deployed_units[0] if self._deployed_units else None
+        # Ensure the file archive is there
+        last_unit = self._deployed_units[-1]
         shared_unit_prefix = path.join(self._config_path, 'units', 'shared')
         for name in self._get_units():
             version = None
@@ -220,6 +238,7 @@ class Controller(object):
                                         version)
             if name.startswith(self._name):
                 unit_name = self._unit_name(name, version)
+
             if not self._deploy_unit(unit_name, unit_file, last_unit):
                 LOGGER.error('Aborting, failed to deploy %s', unit_name)
                 return False
@@ -341,6 +360,63 @@ class Controller(object):
 
         """
         return path.abspath(path.normpath(value))
+
+    def _remove_files(self):
+        if self._file_manifest():
+            vsn_hash = self._file_manifest_hash()
+            if self._global:
+                service = 'global'
+            else:
+                service = self._name
+            unit_name = '{0}-file-deploy@{1}.service'.format(service, vsn_hash)
+            self._remove_unit(unit_name)
+            if self._global:
+                manifest_file = 'global.yaml'
+                service = 'global'
+            else:
+                manifest_file = '{0}/{1}.yaml'.format(self._command, self._name)
+            file_deployment = files.FileDeployment(unit_name,
+                                                   self.env_config,
+                                                   self._config_path,
+                                                   manifest_file,
+                                                   service,
+                                                   self._environment)
+            file_deployment.remove_archive()
+            file_deployment.remove_other_archive_versions()
+        else:
+            LOGGER.debug('No manifest found')
+
+    def _remove_globals(self):
+        for name in self._config.get('global', []):
+            version = None
+            if ':' in name:
+                name, version = name.split(':')
+            self._remove_unit(self._unit_name(name, version))
+
+    def _remove_shared_units(self):
+        for name in self._get_units():
+            version = None
+            if ':' in name:
+                name, version = name.split(':')
+            unit_name = self._unit_name('{0}-{1}'.format(self._name, name),
+                                        version)
+            if name.startswith(self._name):
+                unit_name = self._unit_name(name, version)
+            self._remove_unit(unit_name)
+
+    def _remove_unit(self, unit_name):
+        LOGGER.info('Removing %s', unit_name)
+        unit = self._fleet.unit(unit_name)
+        unit.destroy()
+
+    def _remove_units(self):
+        if self._global:
+            self._remove_globals()
+        self._remove_files()
+        if not self._global:
+            self._remove_shared_units()
+            self._remove_unit(self._unit_name(self._name, self._version))
+        return True
 
     @property
     def _service(self):
