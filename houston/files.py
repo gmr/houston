@@ -33,7 +33,8 @@ ExecStart=/usr/bin/bash -c 'curl -s "http://localhost:8500/v1/kv/{archive_key}?r
 Global=true
 """
 
-SERVICE_TEMPLATE = "MachineMetadata=service={service}"
+GROUP_TEMPLATE = "MachineMetadata=group={group}\n"
+SERVICE_TEMPLATE = "MachineMetadata=service={service}\n"
 
 
 class FileDeployment(object):
@@ -42,7 +43,7 @@ class FileDeployment(object):
     CONSUL_PREFIX = 'houston'
 
     def __init__(self, name, config, config_path, manifest_file, service,
-                 environment=None, prefix=None):
+                 group=None, environment=None, prefix=None):
         self._archive = None
         self._config = config
         self._config_path = config_path
@@ -50,6 +51,7 @@ class FileDeployment(object):
         self._environment = environment
         self._manifest_file = manifest_file
         self._service = service
+        self._group = group
         self._unit_name = name
 
         self._unit_template = DEFAULT_UNIT_TEMPLATE
@@ -87,7 +89,11 @@ class FileDeployment(object):
         return self._consul.kv.delete(self.archive_key)
 
     def remove_other_archive_versions(self):
-        name, version = utils.parse_unit_name(self._unit_name)
+        name, parent, group, version = utils.parse_unit_name(self._unit_name)
+        if parent:
+            name = '{0}.{1}'.format(name, parent)
+        if group:
+            name = '{0}:{1}'.format(name, group)
         keys = self._consul.kv.find('{0}/{1}@'.format(self._consul_prefix,
                                                       name))
         for key in keys:
@@ -99,6 +105,9 @@ class FileDeployment(object):
         output = self._unit_template
         if self._service != 'global':
             output += SERVICE_TEMPLATE
+        if self._group:
+            output += GROUP_TEMPLATE
+            output = output.replace('{group}', self._group)
         output = output.replace('{archive_key}', self._archive_key)
         return output.replace('{service}', self._service)
 
@@ -169,6 +178,8 @@ class FileDeployment(object):
     def _replace_variables(self, content):
         if '{service}' in content:
             content = content.replace('{service}', self._service)
+        if '{group}' in content:
+            content = content.replace('{group}', self._group)
         if '{environment}' in content:
             content = content.replace('{environment}', self._environment)
         return content

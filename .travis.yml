@@ -1,14 +1,12 @@
 sudo: false
 language: python
 python:
-  - 2.6
   - 2.7
   - pypy
-  - 3.2
   - 3.3
   - 3.4
+  - 3.5
 install:
-  - if [[ $TRAVIS_PYTHON_VERSION == '2.6' ]]; then pip install unittest2 --download-cache $HOME/.pip-cache; fi
   - pip install -r requirements.txt --download-cache $HOME/.pip-cache
   - pip install -r test-requirements.txt --download-cache $HOME/.pip-cache
 script: nosetests --with-coverage --cover-package=houston -v

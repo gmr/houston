@@ -44,6 +44,7 @@ class CLI(object):
         obj = controller.Controller(args.config_dir, args.environment,
                                     args.command,
                                     args_dict.get('name'),
+                                    args_dict.get('group'),
                                     args_dict.get('version'),
                                     args.delay, args.max_tries,
                                     args.no_dependencies,
@@ -70,6 +71,9 @@ class CLI(object):
         parser.add_argument('-d', '--delay', action='store', type=int,
                             help='How long to pause between service '
                                  'activation checks', default=5)
+
+        parser.add_argument('-g', '--group', action='store',
+                            help='Optional deployment group')
 
         parser.add_argument('-m', '--max-tries', action='store', type=int,
                             help='How many times should Houston try and'
@@ -106,9 +110,6 @@ class CLI(object):
                                        help='Deploy a standalone stack')
         sa_parser.add_argument('name', nargs=1,
                                help='Name of the standalone stack to deploy')
-
-
-
         return parser
 
 
