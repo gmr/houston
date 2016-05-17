@@ -1,5 +1,8 @@
 Houston
 =======
+
+:boom:**Important**:boom: This project is deprecated and no longer maintained.
+
 Easy docker stack deployment to `CoreOS <https://coreos.com>`_ clusters using
 `Fleet <http://github.com/coreos/fleet>`_ and `Consul <https://www.consul.io>`_.
 
